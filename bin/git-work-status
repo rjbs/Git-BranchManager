@@ -80,8 +80,11 @@ use Text::Table;
 # double-width, but will not be counted as such. -- rjbs, 2020-06-07
 my $table = Text::Table->new('BRANCH', 'LOCAL', ' REMOTE', '  AGREE', '   REQ');
 
+my $count = 0;
+
 for my $branch (sort keys %status) {
   next if $IS_IMMORTAL{$branch}; # Hm? -- rjbs, 2020-06-07
+  $count++;
 
   my $bs = $status{$branch};
 
@@ -127,4 +130,4 @@ for my $branch (sort keys %status) {
 print colored([ 'ansi226' ], $table->title);
 print $table->body;
 
-say "• branch count: " . (keys %status);
+say "• branch count: $count";

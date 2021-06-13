@@ -156,10 +156,12 @@ package Git::BranchManager::Client::GitLab {
 
   sub _build_token {
     my ($self) = @_;
-    my $token = $ENV{"GITLAB_API_TOKEN:$self->{host}"}
-             // $ENV{"FM_GITLAB_API_TOKEN"}; # XXX DELETE THIS LINE
+    my $host = $self->host;
+    my $var  = $self->host =~ s/\./__/gr;
 
-    Carp::confess("no GitLab token available for host $self->{host}")
+    my $token = $ENV{"GITLAB_API_TOKEN__$var"};
+
+    Carp::confess("no GitLab token available for host $host")
       unless $token;
 
     return $token;

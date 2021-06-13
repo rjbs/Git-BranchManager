@@ -2,6 +2,8 @@
 use v5.20.0;
 use warnings;
 
+# PODNAME: git-publish
+
 use Git::BranchManager::Util -all;
 use Process::Status;
 

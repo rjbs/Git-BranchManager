@@ -2,6 +2,8 @@
 use v5.20.0;
 use warnings;
 
+# PODNAME: git-branch-diff
+
 use Git::BranchManager::Util -all;
 
 die "usage: branch-diff SOURCE TO-REPLACE\n" unless @ARGV == 2;

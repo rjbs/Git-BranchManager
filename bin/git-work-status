@@ -127,4 +127,4 @@ for my $branch (sort keys %status) {
 print colored([ 'ansi226' ], $table->title);
 print $table->body;
 
-say "• total branch count: " . (keys %status);
+say "• branch count: " . (keys %status);

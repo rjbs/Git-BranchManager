@@ -59,7 +59,7 @@ my $plan = compute_changes(
 
 print_change_plan($plan);
 
-my $must_confirm = grep {; $_->[0] ne 'BASE' && $_->[0] ne 'KEEP' } @$plan;
+my $must_confirm = grep {; $_->[0] eq 'DROP' } @$plan;
 
 if ($must_confirm) {
   die "Can't confirm destructive push without terminal\n" unless -t *STDIN;

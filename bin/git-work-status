@@ -7,7 +7,6 @@ use warnings;
 use utf8;
 binmode *STDOUT, ':encoding(UTF-8)';
 
-use lib 'lib';
 use Git::BranchManager::Logger -all;
 use Git::BranchManager::Util -all;
 

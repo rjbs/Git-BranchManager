@@ -1,4 +1,5 @@
 package Git::BranchManager::Client;
+# ABSTRACT: API clients used by Git::BranchManager
 
 use v5.26.0;
 use warnings;

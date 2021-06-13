@@ -1,0 +1,4 @@
+Revision history for {{$dist->name}}
+
+{{$NEXT}}
+          - refactored for general use from Fastmail-specific code

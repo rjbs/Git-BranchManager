@@ -1,4 +1,5 @@
 package Git::BranchManager::Util;
+# ABSTRACT: helper routines for Git::BranchManager
 
 use v5.26.0;
 use warnings;

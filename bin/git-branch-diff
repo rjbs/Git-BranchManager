@@ -1,0 +1,18 @@
+#!perl
+use v5.20.0;
+use warnings;
+
+use Git::BranchManager::Util -all;
+
+die "usage: branch-diff SOURCE TO-REPLACE\n" unless @ARGV == 2;
+
+my $CONFIG = Git::BranchManager::Util->get_config;
+my $main    = $CONFIG->{primary}{branch};
+
+my $plan = compute_changes(
+  $ARGV[1],
+  $ARGV[0],
+  $main,
+);
+
+print_change_plan($plan);

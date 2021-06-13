@@ -1,0 +1,74 @@
+#!perl
+use v5.20.0;
+use warnings;
+
+use Git::BranchManager::Util -all;
+use Process::Status;
+
+# 0.  get config
+my $CONFIG = Git::BranchManager::Util->get_config;
+
+my $primary = $CONFIG->{primary}{remote};
+my $main    = $CONFIG->{primary}{branch};
+my $me      = $CONFIG->{my}{remote};
+
+my %IS_IMMORTAL = map {; $_ => 1 } (
+  'HEAD',
+  $main,
+  $CONFIG->{branches}{immortal}->@*,
+  $CONFIG->{branches}{mirrored}->@*,
+);
+
+# 1.  determine current head
+my $line = `git status --branch --porcelain=v2 | grep branch.head`;
+my ($branch) = $line =~ /\A# branch\.head (.+)$/m;
+
+die "Can't compute current branch for some reason!\n" unless length $branch;
+
+# 2.  abort if it's immortal
+die "Refusing to even consider publishing branch $branch"
+  if $IS_IMMORTAL{$branch} || $branch =~ m{/};
+
+# 3.  update my remote
+`git fetch $me`;
+Process::Status->assert_ok("fetching remote $me");
+
+# 4.  if remote/branch does not exist, push and exit
+`git show-ref $me/$branch`;
+if ($?) {
+  say "Remote branch $me/$branch does not exist, pushing...";
+  system("git push $me $branch");
+  exit;
+}
+
+# 5.  if local/branch is ff of remote/branch, push and exit
+my $is_ff = ! system("git merge-base --is-ancestor $branch $me/$branch");
+
+if ($is_ff) {
+  system("git push $me $branch");
+}
+
+# 6.  print diff and get confirmation to push --force-with-lease
+my $plan = compute_changes(
+  $branch,
+  "$me/$branch",
+  $main,
+);
+
+print_change_plan($plan);
+
+my $must_confirm = grep {; $_->[0] ne 'BASE' && $_->[0] ne 'KEEP' } @$plan;
+
+if ($must_confirm) {
+  die "can't confirm destructive push" unless -t *STDIN;
+
+  say ">>>> This plan looks destructive.";
+  say ">>>> To continue, enter the branch name ($branch).";
+
+  my $line = <STDIN>;
+  chomp $line;
+
+  die "You didn't enter the branch name, aborting.\n" unless $line eq $branch;
+}
+
+system("git push --force-with-lease $me $branch");

@@ -1,0 +1,168 @@
+#!perl
+use v5.20.0;
+use warnings;
+
+use utf8;
+binmode *STDOUT, ':encoding(UTF-8)';
+
+use Git::BranchManager::Util -all;
+use Git::BranchManager::Logger -all;
+
+use Getopt::Long::Descriptive;
+use JSON qw(decode_json);
+use LWP::UserAgent;
+use Process::Status;
+use Term::ANSIColor;
+
+my ($opt, $usage) = describe_options(
+  '%c %o',
+  [ 'really',   'really delete branches' ],
+  [ 'verbose',  "I like noise and it's gotta be loud!" ],
+);
+
+$Git::BranchManager::Util::REALLY  = 1 if $opt->really;
+$Git::BranchManager::Util::VERBOSE = 1 if $opt->verbose;
+
+my $CONFIG = Git::BranchManager::Util->get_config;
+
+my $primary = $CONFIG->{primary}{remote};
+my $main    = $CONFIG->{primary}{branch};
+my $me      = $CONFIG->{my}{remote};
+
+my %IS_IMMORTAL = map {; $_ => 1 } (
+  'HEAD',
+  $main,
+  $CONFIG->{branches}{immortal}->@*,
+  $CONFIG->{branches}{mirrored}->@*,
+);
+
+my %IS_MIRROR   = map {; $_ => 1 } (
+  $CONFIG->{branches}{mirrored}->@*,
+);
+
+my $orig_main_sha = ref_sha("$primary/$main");
+
+# First, get ourselves up to date.
+run("git fetch $primary --prune", { or_die => 1 });
+run("git fetch $me --prune", { or_die => 1 });
+
+my $main_sha = ref_sha("$primary/$main");
+
+if ($main_sha ne $orig_main_sha) {
+  my $old_short = substr $orig_main_sha, 0, 8;
+  my $new_short = substr $main_sha, 0, 8;
+
+  note "Branch $primary/$main has change from $old_short to $new_short";
+}
+
+my %local_rebase_tree_id; # Doo dah, doo dah
+
+{
+  # Local branches that have been not been merged can, maybe, be rebased.
+  for my $branch (get_branches(qw(--list --no-merged), "$primary/$main")) {
+    if (not system("git merge-base --is-ancestor $primary/$main $branch")) {
+      # If the branch is a descendent of primary/main, nothing to do here.
+      noop "Local branch $branch is already a descendant of $primary/$main.";
+      $local_rebase_tree_id{$branch} = ref_tree($branch);
+      next;
+    }
+
+    if ($IS_MIRROR{$branch}) {
+      note "Resetting mirrored branch $branch to $primary/$branch.";
+
+      run("git checkout --force $branch", { or_die => 1 });
+      run("git reset --hard $primary/$branch", { or_die => 1 });
+      run("git submodule update", { or_die => 1 });
+      next;
+    }
+
+    note "Local branch $branch will be rebased on $primary/$main.";
+
+    my $ok = run("git checkout --force $branch")
+          && run("git rebase $primary/$main");
+
+    if ($ok) {
+      okay "Local branch $branch has been rebased!";
+      $local_rebase_tree_id{$branch} = ref_tree($branch);
+    } else {
+      drat "We couldn't rebase local branch $branch and that stinks.";
+      run("git rebase --abort");
+      run("git checkout --force $main", { or_die => 1 });
+      run("git reset --hard", { or_die => 1 });
+      run("git submodule update", { or_die => 1 });
+    }
+  }
+}
+
+{
+  # Remote branches that have been not been merged can, maybe, be rebased.
+  for my $branch (get_branches(qw(-r --list), "$me/*", "--no-merged", "$primary/$main")) {
+    my ($remote, $head) = split m{/}, $branch, 2;
+
+    next if $IS_IMMORTAL{$head};
+
+    if (not system("git merge-base --is-ancestor $primary/$main $branch")) {
+      # If the branch is a descendent of primary/main, nothing to do here.
+      noop "Remote branch $branch is already a descendant of $main.";
+      next;
+    }
+
+    note "Remote branch $branch will be rebased on $primary/$main.";
+
+    my $sha = ref_sha($branch);
+    my $ok = run("git checkout --force $sha")
+          && run("git rebase $primary/$main");
+
+    if ($ok) {
+      my $new_sha = ref_sha('--head');
+      my $short   = substr $new_sha, 0, 8;
+
+      note "Remote branch $branch at $sha rebased to $new_sha";
+
+      if ($new_sha eq $main_sha) {
+        okay "Remote branch $branch, when rebased, is already merged!";
+        run("git push $remote :$head", { or_die => 1, if_really => 1 });
+      } elsif ($new_sha eq $sha) {
+        okay "Remote branch $branch, when rebased, is unchanged!";
+      } elsif (ref_tree($new_sha) eq ($local_rebase_tree_id{$head}//'')) {
+        okay "Remote branch $branch, when rebased, same as local branch!";
+        run("git push --force-with-lease $remote $head", { or_die => 1, if_really => 1 });
+      } else {
+        okay "Remote branch $branch has been rebased to create $short!";
+        run("git push --force-with-lease $remote $new_sha:$head", { or_die => 1, if_really => 1 });
+      }
+    } else {
+      drat "We couldn't rebase remote branch $branch and that stinks.";
+      run("git rebase --abort");
+      run("git checkout --force $main", { or_die => 1 });
+      run("git reset --hard", { or_die => 1 });
+      run("git submodule update", { or_die => 1 });
+    }
+  }
+}
+
+run("git checkout --force $main", { or_die => 1 });
+
+{
+  # Branches on the remote that have been merged can be destroyed.
+  for my $branch (get_branches(qw(-r --list), "$me/*", "--merged", "$primary/$main")) {
+    my ($remote, $head) = split m{/}, $branch, 2;
+    next if $IS_IMMORTAL{$head};
+    okay "Remote branch $branch has been merged.";
+    run("git push $remote :$head", { or_die => 1, if_really => 1 });
+  }
+}
+
+{
+  # Local branches that have been merged can be destroyed.
+  for my $branch (get_branches(qw(--list --merged), "$primary/$main")) {
+    next if $IS_IMMORTAL{$branch};
+    okay "Local branch $branch has been merged.";
+    run("git branch --delete --force $branch", { or_die => 1, if_really => 1 });
+  }
+}
+
+# Clean up our mess just a little.
+run("git submodule foreach git checkout -f");
+
+system("git work-status");

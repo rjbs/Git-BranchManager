@@ -1,0 +1,129 @@
+#!perl
+use v5.20.0;
+use warnings;
+
+use utf8;
+binmode *STDOUT, ':encoding(UTF-8)';
+
+use lib 'lib';
+use Git::BranchManager::Logger -all;
+use Git::BranchManager::Util -all;
+
+use Getopt::Long::Descriptive;
+use JSON qw(decode_json);
+use Process::Status;
+use Term::ANSIColor;
+
+my ($opt, $usage) = describe_options(
+  '%c %o',
+  [ 'verbose',  "I like noise and it's gotta be loud!" ],
+);
+
+$Git::BranchManager::Util::VERBOSE = 1 if $opt->verbose;
+
+my $CONFIG = Git::BranchManager::Util->get_config;
+my $primary = $CONFIG->{primary}{remote};
+my $main    = $CONFIG->{primary}{branch};
+my $me      = $CONFIG->{my}{remote};
+
+my $primary_c = Git::BranchManager::Util->get_client_for_remote($primary);
+my $me_c      = Git::BranchManager::Util->get_client_for_remote($me);
+
+my %IS_IMMORTAL = map {; $_ => 1 } (
+  'HEAD',
+  $main,
+  $CONFIG->{branches}{immortal}->@*,
+  $CONFIG->{branches}{mirrored}->@*,
+);
+
+# First, get ourselves up to date.
+run("git fetch $primary --prune", { or_die => 1 });
+run("git fetch $me --prune", { or_die => 1 });
+
+# STATUS:
+#   branch_name => {
+#     local   => { exists => 0/1, is_ff => 0/1, sha => $hex }
+#     remote  => { exists => 0/1, is_ff => 0/1, sha => $hex }
+#     req     => { number => $num, labels => { k => 1 }, others_exist => 0/1 }
+my %status;
+
+for my $branch (get_branches(qw(--list))) {
+  next if $IS_IMMORTAL{$branch};
+
+  my $sha = ref_sha($branch);
+  $status{$branch}{local} = {
+    exists => 1,
+    sha    => $sha,
+    is_ff  => ! system("git merge-base --is-ancestor $primary/$main $sha"),
+  };
+}
+
+for my $branch (get_branches(qw(-r --list), "$me/*")) {
+  my (undef, $head) = split q{/}, $branch, 2;
+
+  next if $IS_IMMORTAL{$branch};
+
+  my $sha = ref_sha($branch);
+  $status{$head}{remote} = {
+    exists => 1,
+    sha    => $sha,
+    is_ff  => ! system("git merge-base --is-ancestor $primary/$main $sha"),
+  };
+}
+
+my $reqs_for = $primary_c->requests_from_other($me_c);
+
+use Text::Table;
+# These leading spaces aren't a sign of my impending mental collapse.  They're
+# to deal with the fact that (on my terminal, at least), emoji are
+# double-width, but will not be counted as such. -- rjbs, 2020-06-07
+my $table = Text::Table->new('BRANCH', 'LOCAL', ' REMOTE', '  AGREE', '   REQ');
+
+for my $branch (sort keys %status) {
+  next if $IS_IMMORTAL{$branch}; # Hm? -- rjbs, 2020-06-07
+
+  my $bs = $status{$branch};
+
+  my $req_str = q{};
+  if ($reqs_for->{$branch}) {
+    my $req = $reqs_for->{$branch}[0];
+    $req_str = $req->{id};
+
+    my %has_label = map {; fc $_ => 1 } $req->{labels}->@*;
+
+    # This should never happen, right? -- rjbs, 2020-06-07
+    $req_str .= " (and others!)" if @{ $reqs_for->{$branch} } > 1;
+
+    $req_str .= " \N{SLEEPING FACE} " if $has_label{backlogged};
+
+    $req_str .= " \N{CONSTRUCTION SIGN} " if $req->{title} =~ /\Awip:/i;
+
+    $req_str .= " \N{THUMBS UP SIGN} "   if $req->{upvotes}
+                                         || $primary_c->request_is_approved($req);
+
+    $req_str .= " \N{THUMBS DOWN SIGN} " if $req->{downvotes};
+
+    if ($req->{assignees}->@*) {
+      $req_str .= q{ } . join q{ }, map {; "\@$_" } $req->{assignees}->@*;
+    }
+  }
+
+  $table->add(
+    $branch,
+     ($bs->{local}{exists}
+       ? ($bs->{local}{is_ff} ? "✅" : "❌")
+       : "➖"),
+     ($bs->{remote}{exists}
+       ? ($bs->{remote}{is_ff} ? "✅" : "❌")
+       : "➖"),
+     ($bs->{local}{exists} && $bs->{remote}{exists}
+       ? ($bs->{local}{sha} eq $bs->{remote}{sha} ? "✅" : "❌")
+       : "➖"),
+    $req_str,
+  );
+}
+
+print colored([ 'ansi226' ], $table->title);
+print $table->body;
+
+say "• total branch count: " . (keys %status);

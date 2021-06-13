@@ -28,7 +28,7 @@ my ($branch) = $line =~ /\A# branch\.head (.+)$/m;
 die "Can't compute current branch for some reason!\n" unless length $branch;
 
 # 2.  abort if it's immortal
-die "Refusing to even consider publishing branch $branch"
+die "Refusing to even consider publishing branch $branch\n"
   if $IS_IMMORTAL{$branch} || $branch =~ m{/};
 
 # 3.  update my remote
@@ -62,7 +62,7 @@ print_change_plan($plan);
 my $must_confirm = grep {; $_->[0] ne 'BASE' && $_->[0] ne 'KEEP' } @$plan;
 
 if ($must_confirm) {
-  die "can't confirm destructive push" unless -t *STDIN;
+  die "Can't confirm destructive push without terminal\n" unless -t *STDIN;
 
   say ">>>> This plan looks destructive.";
   say ">>>> To continue, enter the branch name ($branch).";

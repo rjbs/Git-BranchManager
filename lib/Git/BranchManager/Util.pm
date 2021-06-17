@@ -26,6 +26,10 @@ sub get_config {
              ? Config::INI::Reader->read_file($path)->{'branch-manager'}
              : {};
 
+  unless (keys %$loaded) {
+    return guess_config();
+  }
+
   my %config;
 
   $config{my} = {
@@ -49,6 +53,85 @@ sub get_config {
       split /\s+/, ($loaded->{'immortal-branches'} // "")
     ],
   };
+
+  return \%config;
+}
+
+sub guess_config {
+  my $username = $ENV{USER};
+
+  unless (length $username) {
+    die qq{Without knowing a username (\$USER), can't guess branch config.\n};
+  }
+
+  my @lines = `git config --get-regexp 'remote\.[a-z0-9]+.url'`;
+  Process::Status->assert_ok("getting list of remote URLs");
+
+  chomp @lines;
+  my %remote_url = map {; split /\s/, $_ } @lines;
+
+  my %config;
+
+  {
+    # guess at my.remote
+    my @good;
+    for my $remote (sort keys %remote_url) {
+      next unless $remote_url{$remote} =~ qr{:\Q$username\E/};
+      push @good, $remote;
+    }
+
+    unless (@good) {
+      die qq{Without an ssh remote for $username, can't guess branch config.\n};
+    }
+
+    if (@good > 1) {
+      die qq{There's more than one ssh remote for $username: @good\n};
+    }
+
+    $good[0] =~ /\Aremote\.([a-z0-9]+)\.url\z/;
+    $config{my} = { remote => $1 };
+  }
+
+  {
+    # guess at primary.remote
+    #
+    # "What's gitbox?" you ask.  It's the name that I have traditionally used
+    # for work's primary remote repository. -- rjbs, 2021-06-17
+    my @candidates = qw(github gitbox origin);
+    my @has = grep {; exists $remote_url{"remote.$_.url"} }
+              @candidates;
+
+    unless (@has) {
+      die qq{No candidates for primary remote.  Expected one of: @candidates\n};
+    }
+
+    if (@has > 1) {
+      die qq{There's more than one possible primary remote: @has\n};
+    }
+
+    $config{primary}{remote} = $has[0];
+  }
+
+  {
+    # guess at primary branch
+    my @lines = `git ls-remote --symref $config{primary}{remote} HEAD`;
+    Process::Status->assert_ok("getting primary remote HEAD");
+
+    chomp @lines;
+    my @matches = map {; m{^ref: refs/heads/(\S+)\tHEAD$}m ? $1 : () } @lines;
+
+    unless (@matches) {
+      die "No candidate for primary branch on remote\n";
+    }
+
+    if (@matches > 1) {
+      die "There's more than one remote head?  This seems impossible.\n";
+    }
+
+    $config{primary}{branch} = $matches[0];
+  }
+
+  $config{branches}{immortal} = [ $config{primary}{branch} ];
 
   return \%config;
 }

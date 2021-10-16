@@ -7,6 +7,7 @@ use warnings;
 use Config::INI::Reader;
 use List::Util qw(max);
 use JSON::MaybeXS qw(decode_json);
+use Process::Status;
 
 our $VERBOSE = 0;
 our $REALLY  = 0;

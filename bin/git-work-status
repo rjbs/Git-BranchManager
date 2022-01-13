@@ -82,6 +82,11 @@ my $table = Text::Table->new('BRANCH', 'LOCAL', ' REMOTE', '  AGREE', '   REQ');
 
 my $count = 0;
 
+my $display_label_as = {};
+if (-e "$ENV{HOME}/.git-labels.json") {
+  $display_label_as = decode_json(`cat $ENV{HOME}/.git-labels.json`);
+}
+
 for my $branch (sort keys %status) {
   next if $IS_IMMORTAL{$branch}; # Hm? -- rjbs, 2020-06-07
   $count++;
@@ -91,14 +96,16 @@ for my $branch (sort keys %status) {
   my $req_str = q{};
   if ($reqs_for->{$branch}) {
     my $req = $reqs_for->{$branch}[0];
-    $req_str = $req->{id};
-
-    my %has_label = map {; fc $_ => 1 } $req->{labels}->@*;
+    $req_str = "$req->{id} ";
 
     # This should never happen, right? -- rjbs, 2020-06-07
-    $req_str .= " (and others!)" if @{ $reqs_for->{$branch} } > 1;
+    $req_str .= "(and others!) " if @{ $reqs_for->{$branch} } > 1;
 
-    $req_str .= " \N{SLEEPING FACE} " if $has_label{backlogged};
+    for my $label (sort map {; fc } $req->{labels}->@*) {
+      if (my $display = $display_label_as->{fc $label}) {
+        $req_str .= "$display  ";
+      }
+    }
 
     $req_str .= " \N{CONSTRUCTION SIGN} " if $req->{title} =~ /\Awip:/i;
 

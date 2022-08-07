@@ -11,7 +11,7 @@ use Git::BranchManager::Util -all;
 use Git::BranchManager::Logger -all;
 
 use Getopt::Long::Descriptive;
-use JSON qw(decode_json);
+use JSON::MaybeXS qw(decode_json);
 use LWP::UserAgent;
 use Process::Status;
 use Term::ANSIColor;

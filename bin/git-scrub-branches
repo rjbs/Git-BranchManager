@@ -1,5 +1,5 @@
 #!perl
-use v5.20.0;
+use v5.34.0;
 use warnings;
 
 # PODNAME: git-scrub-branches
@@ -20,6 +20,7 @@ my ($opt, $usage) = describe_options(
   '%c %o',
   [ 'really',   'really delete branches' ],
   [ 'verbose',  "I like noise and it's gotta be loud!" ],
+  [ 'even-with-requests|X', "even rebase and update remote branchs with pull/merge requests" ],
 );
 
 $Git::BranchManager::Util::REALLY  = 1 if $opt->really;
@@ -30,6 +31,14 @@ my $CONFIG = Git::BranchManager::Util->get_config;
 my $primary = $CONFIG->{primary}{remote};
 my $main    = $CONFIG->{primary}{branch};
 my $me      = $CONFIG->{my}{remote};
+
+my $reqs_for = {};
+unless ($opt->even_with_requests) {
+  my $primary_c = Git::BranchManager::Util->get_client_for_remote($primary);
+  my $me_c      = Git::BranchManager::Util->get_client_for_remote($me);
+
+  $reqs_for  = $primary_c->requests_from_other($me_c);
+}
 
 my %IS_IMMORTAL = map {; $_ => 1 } (
   'HEAD',
@@ -102,6 +111,12 @@ my %local_rebase_tree_id; # Doo dah, doo dah
     my ($remote, $head) = split m{/}, $branch, 2;
 
     next if $IS_IMMORTAL{$head};
+
+    if ($reqs_for->{$head}) {
+      my $nums = join q{, }, map {; $_->{id} } $reqs_for->{$head}->@*;
+      noop "Remote branch $branch has MRs ($nums), skipping";
+      next;
+    }
 
     if (not system("git merge-base --is-ancestor $primary/$main $branch")) {
       # If the branch is a descendent of primary/main, nothing to do here.

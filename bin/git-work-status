@@ -60,6 +60,8 @@ for my $branch (get_branches(qw(--list))) {
 }
 
 for my $branch (get_branches(qw(-r --list), "$me/*")) {
+  next if $branch eq $me; # I believe this is "your remote HEAD"
+
   my (undef, $head) = split q{/}, $branch, 2;
 
   next if $IS_IMMORTAL{$branch};

@@ -108,6 +108,8 @@ my %local_rebase_tree_id; # Doo dah, doo dah
 {
   # Remote branches that have been not been merged can, maybe, be rebased.
   for my $branch (get_branches(qw(-r --list), "$me/*", "--no-merged", "$primary/$main")) {
+    next if $branch eq $me; # I believe this is "your remote HEAD"
+
     my ($remote, $head) = split m{/}, $branch, 2;
 
     next if $IS_IMMORTAL{$head};
@@ -163,6 +165,8 @@ run("git checkout --force $main", { or_die => 1 });
 {
   # Branches on the remote that have been merged can be destroyed.
   for my $branch (get_branches(qw(-r --list), "$me/*", "--merged", "$primary/$main")) {
+    next if $branch eq $me; # I believe this is "your remote HEAD"
+
     my ($remote, $head) = split m{/}, $branch, 2;
     next if $IS_IMMORTAL{$head};
     okay "Remote branch $branch has been merged.";

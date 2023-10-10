@@ -275,17 +275,20 @@ sub describe_commit {
   return $desc;
 }
 
-sub print_change_plan {
-  my ($plan) = @_;
-
-  require Term::ANSIColor;
-
-  state %color = (
+my %color;
+BEGIN {
+  %color = (
     BASE => 'ansi226',
     PLUS => 'bright_green',
     DROP => 'ansi214',
     KEEP => 'ansi141',
   );
+}
+
+sub print_change_plan {
+  my ($plan) = @_;
+
+  require Term::ANSIColor;
 
   for my $item (@$plan) {
     my $desc = describe_commit($item->[1]);

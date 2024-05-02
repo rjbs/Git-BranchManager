@@ -103,7 +103,7 @@ for my $branch (sort keys %status) {
   my $req_str = q{};
   if ($reqs_for->{$branch}) {
     my $req = $reqs_for->{$branch}[0];
-    $req_str = "$req->{id} ";
+    $req_str = sprintf '%5i ', "$req->{id} ";
 
     # This should never happen, right? -- rjbs, 2020-06-07
     $req_str .= "(and others!) " if @{ $reqs_for->{$branch} } > 1;

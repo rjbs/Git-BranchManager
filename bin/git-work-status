@@ -108,13 +108,13 @@ for my $branch (sort keys %status) {
     # This should never happen, right? -- rjbs, 2020-06-07
     $req_str .= "(and others!) " if @{ $reqs_for->{$branch} } > 1;
 
+    $req_str .= "\N{CONSTRUCTION SIGN}  " if $req->{is_draft};
+
     for my $label (sort map {; fc } $req->{labels}->@*) {
       if (my $display = $display_label_as->{fc $label}) {
         $req_str .= "$display  ";
       }
     }
-
-    $req_str .= "\N{CONSTRUCTION SIGN}  " if $req->{title} =~ /\Awip:/i;
 
     $req_str .= "\N{THUMBS UP SIGN}  "    if $req->{upvotes}
                                           || $primary_c->request_is_approved($req);

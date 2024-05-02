@@ -121,6 +121,8 @@ package Git::BranchManager::Client::GitHub {
         labels => [ map {; $_->{name} } ($pull->{labels} // [])->@* ],
         title  => $pull->{title},
 
+        is_draft => $pull->{draft},
+
         assignees => [
           map {; $_->{login} } ($pull->{assignees} // [])->@*
         ],
@@ -239,6 +241,8 @@ package Git::BranchManager::Client::GitLab {
           id     => $req->{iid},
           labels => $req->{labels},
           title  => $req->{title},
+
+          is_draft => scalar($req->{title} =~ /\Adraft:/i),
 
           assignees => [
             map {; $_->{username} } ($req->{assignees} // [])->@*

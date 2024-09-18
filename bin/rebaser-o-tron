@@ -1,0 +1,142 @@
+#!/usr/bin/env perl
+use v5.36.0;
+use utf8;
+
+# PODNAME: rebaser-o-tron
+
+use Data::Printer;
+use Getopt::Long::Descriptive;
+use Git::BranchManager::Logger -all;
+use Git::BranchManager::Util qw(ref_sha);
+use Process::Status;
+
+binmode *STDOUT, ':encoding(utf-8)';
+
+my $client = Git::BranchManager::Util->get_client_for_remote('github');
+my $prs    = $client->all_requests;
+
+my ($opt, $usage) = describe_options(
+  '%c %o',
+  [ 'really',           'actually force-push back rebased versions' ],
+  [ 'only-user|U=s@',   'only when source repository belongs to this user' ],
+  [ 'only-author|A=s@', 'only when PR was created by this user' ],
+  [ 'exclude-from|X=s@', 'not when PR created by or source repo belongs to this user' ],
+);
+
+my %rebase_for_repo_user;
+if ($opt->only_user) {
+  $rebase_for_repo_user{$_} = 1 for $opt->only_user->@*;
+}
+
+my %rebase_for_author;
+if ($opt->only_author) {
+  $rebase_for_author{$_} = 1 for $opt->only_author->@*;
+}
+
+my %exclude_from;
+if ($opt->exclude_from) {
+  $exclude_from{$_} = 1 for $opt->exclude_from->@*;
+}
+
+# This is the last notable change to the GitHub Action.
+my $required_ancestor = 'b4336171df343faf918f9822a0ff03a956400e17';
+
+sub header ($i) {
+  return Term::ANSIColor::colored([ 'bright_black' ], '───┤ ')
+       . Term::ANSIColor::colored([ 'bright_white' ], sprintf('PR %4i', $i))
+       . Term::ANSIColor::colored([ 'bright_black' ], ' ├' . ('─' x 65));
+}
+
+my @rebased_prs;
+my @skipped_prs;
+my @unrebased_prs;
+
+PR: for my $userbranch (sort keys %$prs) {
+  my $pr = $prs->{$userbranch}[0];
+  my $number = $pr->{id};
+  my ($username, $branch) = split m{/}, $userbranch, 2;
+
+  my $author = $pr->{_github_pull}{user}{login};
+
+  # XXX another thing to make generic
+  next unless $pr->{_github_pull}{base}{label} eq 'cyrusimap:master';
+
+  next if %rebase_for_repo_user && ! $rebase_for_repo_user{ $username };
+  next if %rebase_for_author    && ! $rebase_for_author{ $author };
+
+  next if %exclude_from && ($exclude_from{$username} || $exclude_from{$author});
+
+  say header($number);
+
+  note "fetching i=$number u=$username b=$branch";
+  my $remote_url = "git\@github.com:$username/cyrus-imapd.git";
+  system("git fetch $remote_url $branch > /dev/null");
+  Process::Status->assert_ok("fetching branch for pr");
+
+  my $fetched_sha = ref_sha('FETCH_HEAD');
+  note "current sha is $fetched_sha";
+
+  system("git merge-base --is-ancestor $required_ancestor FETCH_HEAD");
+  if ($? == 0) {
+    noop "branch is already a descendant of GitHub action";
+    push @skipped_prs, $number;
+    next PR;
+  }
+
+  system("git merge-base --is-ancestor github/master FETCH_HEAD");
+  if ($? == 0) {
+    noop "branch is already a descendant of github/master";
+    push @skipped_prs, $number;
+    next PR;
+  }
+
+  # Just in case.
+  my $pr_branch = "PR-$number";
+  system("git branch -D $pr_branch");
+
+  system("git checkout -b $pr_branch FETCH_HEAD");
+
+  system("git rebase github/master");
+
+  if ($?) {
+    system("git rebase --abort");
+    Process::Status->assert_ok("giving up after failed rebase");
+    system("git checkout -f master && git branch -D $pr_branch");
+    push @unrebased_prs, $number;
+    next PR;
+  }
+
+  my $rebased_sha = ref_sha($pr_branch);
+
+  okay "rebased, new sha is $rebased_sha";
+
+  if ($fetched_sha eq $rebased_sha) {
+    noop "rebase accomplished nothing";
+    system("git checkout -f master && git branch -D $pr_branch");
+    next PR;
+  }
+
+  okay "rebased $userbranch as PR-$number";
+  push @rebased_prs, $number;
+
+  if ($opt->really) {
+    system("git push --force $remote_url $pr_branch:$branch");
+    Process::Status->assert_ok("force pushing rebased version");
+  }
+
+  system("git checkout -f master && git branch -D $pr_branch");
+}
+
+if (@rebased_prs) {
+  okay "Rebasing the following PRs succeeded: @rebased_prs";
+}
+
+if (@skipped_prs) {
+  noop "Skipped the following PRs: @skipped_prs";
+}
+
+if (@unrebased_prs) {
+  drat "Rebasing the following PRs failed: @unrebased_prs";
+}
+
+system("git checkout master");

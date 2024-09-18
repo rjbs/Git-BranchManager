@@ -127,13 +127,45 @@ package Git::BranchManager::Client::GitHub {
           map {; $_->{login} } ($pull->{assignees} // [])->@*
         ],
 
-        # XXX these should go. -- rjbs, 2021-06-12
-        upvotes   => 0,
-        downvotes => 0,
+        _github_pull => $pull,
       }
     }
 
     return \%reqs_for_branch;
+  }
+
+  sub all_requests {
+    my ($self) = @_;
+
+    my $path = join q{/}, '/repos', $self->owner, $self->repo, 'pulls';
+    $path .= '?per_page=100&state=open';
+
+    my $pulls = $self->_api_get($path);
+
+    die "pagination not implemented but second page might exist!"
+      if @$pulls == 100;
+
+    my %reqs_for_userbranch;
+    for my $pull (@$pulls) {
+      my $user = $pull->{head}{user}{login};
+      my $head = $pull->{head}{ref};
+
+      push @{ $reqs_for_userbranch{"$user/$head"} }, {
+        id => $pull->{number},
+        labels => [ map {; $_->{name} } ($pull->{labels} // [])->@* ],
+        title  => $pull->{title},
+
+        is_draft => $pull->{draft},
+
+        assignees => [
+          map {; $_->{login} } ($pull->{assignees} // [])->@*
+        ],
+
+        _github_pull => $pull,
+      }
+    }
+
+    return \%reqs_for_userbranch;
   }
 
   sub request_is_approved {

@@ -133,7 +133,7 @@ my %local_rebase_tree_id; # Doo dah, doo dah
           && run("git rebase $primary/$main");
 
     if ($ok) {
-      my $new_sha = ref_sha('--head');
+      my $new_sha = ref_sha('HEAD');
       my $short   = substr $new_sha, 0, 8;
 
       note "Remote branch $branch at $sha rebased to $new_sha";

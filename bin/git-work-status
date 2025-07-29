@@ -116,10 +116,7 @@ for my $branch (sort keys %status) {
       }
     }
 
-    $req_str .= "\N{THUMBS UP SIGN}  "    if $req->{upvotes}
-                                          || $primary_c->request_is_approved($req);
-
-    $req_str .= "\N{THUMBS DOWN SIGN}  "  if $req->{downvotes};
+    $req_str .= "\N{THUMBS UP SIGN}  "    if $primary_c->request_is_approved($req);
 
     if ($req->{assignees}->@*) {
       $req_str .= q{ } . join q{ }, map {; "\@$_" } $req->{assignees}->@*;

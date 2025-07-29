@@ -280,9 +280,6 @@ package Git::BranchManager::Client::GitLab {
             map {; $_->{username} } ($req->{assignees} // [])->@*
           ],
 
-          # XXX these should go. -- rjbs, 2021-06-12
-          upvotes   => $req->{upvotes},
-          downvotes => $req->{downvotes},
         };
       }
     }

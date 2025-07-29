@@ -189,7 +189,7 @@ sub get_branches {
 
 sub ref_sha {
   my ($ref) = @_;
-  my ($line) = `git show-ref $ref`;
+  my ($line) = `git rev-parse $ref`;
   chomp $line;
   my ($sha) = split /\s/, $line;
   die "no sha for $ref\n" unless $sha;

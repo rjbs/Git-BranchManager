@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-use 5.026000;
+use 5.036000;
 
 use ExtUtils::MakeMaker 6.78;
 
@@ -17,13 +17,15 @@ my %WriteMakefileArgs = (
     "bin/git-branch-diff",
     "bin/git-publish",
     "bin/git-scrub-branches",
-    "bin/git-work-status"
+    "bin/git-work-status",
+    "bin/rebaser-o-tron"
   ],
   "LICENSE" => "perl",
-  "MIN_PERL_VERSION" => "5.026000",
+  "MIN_PERL_VERSION" => "5.036000",
   "NAME" => "Git::BranchManager",
   "PREREQ_PM" => {
     "Config::INI::Reader" => 0,
+    "Data::Printer" => 0,
     "Getopt::Long::Descriptive" => 0,
     "JSON::MaybeXS" => 0,
     "LWP::UserAgent" => 0,
@@ -52,6 +54,7 @@ my %WriteMakefileArgs = (
 
 my %FallbackPrereqs = (
   "Config::INI::Reader" => 0,
+  "Data::Printer" => 0,
   "ExtUtils::MakeMaker" => 0,
   "File::Spec" => 0,
   "Getopt::Long::Descriptive" => 0,

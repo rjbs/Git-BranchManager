@@ -1,8 +1,7 @@
 package Git::BranchManager::Util;
 # ABSTRACT: helper routines for Git::BranchManager
 
-use v5.26.0;
-use warnings;
+use v5.36.0;
 
 use Config::INI::Reader;
 use List::Util qw(max);

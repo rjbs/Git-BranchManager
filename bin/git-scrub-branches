@@ -1,6 +1,5 @@
 #!perl
-use v5.26.0;
-use warnings;
+use v5.36.0;
 
 # PODNAME: git-scrub-branches
 

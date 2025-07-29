@@ -1,8 +1,7 @@
 package Git::BranchManager::Client;
 # ABSTRACT: API clients used by Git::BranchManager
 
-use v5.26.0;
-use warnings;
+use v5.36.0;
 
 use JSON::MaybeXS;
 use LWP::UserAgent;

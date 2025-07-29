@@ -126,6 +126,8 @@ package Git::BranchManager::Client::GitHub {
           map {; $_->{login} } ($pull->{assignees} // [])->@*
         ],
 
+        web_url => $pull->{html_url},
+
         _github_pull => $pull,
       }
     }
@@ -279,6 +281,7 @@ package Git::BranchManager::Client::GitLab {
             map {; $_->{username} } ($req->{assignees} // [])->@*
           ],
 
+          web_url => $req->{web_url},
         };
       }
     }

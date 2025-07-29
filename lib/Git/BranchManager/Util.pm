@@ -17,6 +17,8 @@ use Sub::Exporter -setup => [ qw(
   compute_changes
   print_change_plan
   describe_commit
+
+  hyperlink
 ) ];
 
 sub get_config {
@@ -303,6 +305,11 @@ sub print_change_plan {
 
     say $str;
   }
+}
+
+sub hyperlink ($url, $text = $url) {
+  die unless $url;
+  return "\e]8;;$url\e\\$text\e]8;;\e\\";
 }
 
 1;

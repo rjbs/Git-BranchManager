@@ -102,7 +102,9 @@ for my $branch (sort keys %status) {
   my $req_str = q{};
   if ($reqs_for->{$branch}) {
     my $req = $reqs_for->{$branch}[0];
-    $req_str = sprintf '%5i ', "$req->{id} ";
+
+    $req_str = hyperlink($req->{web_url}, $req->{id}) . " ";
+    $req_str = q{ } x (5 - length $req->{id}) . $req_str;
 
     # This should never happen, right? -- rjbs, 2020-06-07
     $req_str .= "(and others!) " if @{ $reqs_for->{$branch} } > 1;
@@ -138,6 +140,15 @@ for my $branch (sort keys %status) {
 }
 
 print colored([ 'ansi226' ], $table->title);
-print $table->body;
+
+# Ugh.  Text::Table strips color codes when computing width, but can't strip
+# other codes like OSC8 used for hyperlinking.  It also forbids the use of
+# coderef aligners, which Text::Aligner allows to solve this problem… but which
+# I couldn't get to work anyway.  So, just let it add a ton of spaces, which
+# we'll then remove.  This means the hyperlink needs to always be in the
+# rightmost column! -- rjbs, 2025-07-29
+my $body = $table->body;
+$body =~ s/\h+\n/\n/g;
+print $body;
 
 say "• branch count: $count";
